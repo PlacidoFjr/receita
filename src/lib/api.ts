@@ -1,10 +1,13 @@
 import type { Lancamento, PageResult, Parcelamento } from './types'
+import { getAuthToken } from './auth'
 
 async function request<T>(path: string, init?: RequestInit) {
+  const token = getAuthToken()
   const res = await fetch(path, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   })
@@ -13,6 +16,28 @@ async function request<T>(path: string, init?: RequestInit) {
     throw new Error(data?.error || `Erro HTTP ${res.status}`)
   }
   return (await res.json()) as T
+}
+
+export async function authRegister(input: { email: string; password: string }) {
+  return request<{ token: string; user: { id: number; email: string } }>(`/api/auth/register`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function authLogin(input: { email: string; password: string }) {
+  return request<{ token: string; user: { id: number; email: string } }>(`/api/auth/login`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function authMe() {
+  return request<{ user: { id: number; email: string } }>(`/api/auth/me`)
+}
+
+export async function authLogout() {
+  return request<{ ok: true }>(`/api/auth/logout`, { method: 'POST' })
 }
 
 export async function listLancamentos(params: {

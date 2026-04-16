@@ -1,7 +1,13 @@
 import type { ReactNode } from 'react'
 import type { RouteKey } from './route'
 
-export function Layout(props: { title: string; route: RouteKey; children: ReactNode }) {
+export function Layout(props: {
+  title: string
+  route: RouteKey
+  userEmail: string
+  onLogout: () => void
+  children: ReactNode
+}) {
   return (
     <div className="layout">
       <aside className="sidebar">
@@ -21,6 +27,12 @@ export function Layout(props: { title: string; route: RouteKey; children: ReactN
       <main className="main">
         <header className="topbar">
           <h1 className="page-title">{props.title}</h1>
+          <div className="topbar__right">
+            <div className="muted">{props.userEmail}</div>
+            <button className="btn btn--small" onClick={props.onLogout} type="button">
+              Sair
+            </button>
+          </div>
         </header>
         <div className="content">{props.children}</div>
       </main>

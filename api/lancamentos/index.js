@@ -1,5 +1,6 @@
 import { ensureSchema, sql } from '../_db.js'
 import { coerceMoney, isIsoDate, json, normalizeDateField, parsePageParams, readJsonBody } from '../_utils.js'
+import { getUserFromAuthHeader } from '../_auth.js'
 
 function buildWhere(searchParams) {
   const clauses = []
@@ -45,6 +46,9 @@ function buildWhere(searchParams) {
 
 export default async function handler(req, res) {
   await ensureSchema()
+  if (req.method === 'OPTIONS') return json(res, 204, {})
+  const user = await getUserFromAuthHeader(req)
+  if (!user) return json(res, 401, { error: 'Não autenticado' })
 
   if (!req.url) return json(res, 400, { error: 'Bad request' })
   const url = new URL(req.url, `http://${req.headers.host}`)
@@ -52,18 +56,20 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     const { whereSql, values } = buildWhere(searchParams)
+    const whereWithUser = whereSql ? `${whereSql} AND user_id = $${values.length + 1}` : `WHERE user_id = $1`
+    const valuesWithUser = [...values, user.id]
     const { page, pageSize, offset } = parsePageParams(searchParams)
 
-    const totalRows = await sql.query(`SELECT COUNT(*)::int AS total FROM lancamentos ${whereSql}`, values)
+    const totalRows = await sql.query(`SELECT COUNT(*)::int AS total FROM lancamentos ${whereWithUser}`, valuesWithUser)
     const total = totalRows[0]?.total ?? 0
 
-    const listValues = [...values, pageSize, offset]
+    const listValues = [...valuesWithUser, pageSize, offset]
     const rows = await sql.query(
       `SELECT id, data, descricao, categoria, tipo, valor::float8 AS valor, status, classe_saida
        FROM lancamentos
-       ${whereSql}
+       ${whereWithUser}
        ORDER BY data DESC, id DESC
-       LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+       LIMIT $${valuesWithUser.length + 1} OFFSET $${valuesWithUser.length + 2}`,
       listValues,
     )
 
@@ -91,10 +97,17 @@ export default async function handler(req, res) {
       return json(res, 400, { error: 'Classe da saída inválida' })
 
     const rows = await sql`
-      INSERT INTO lancamentos (data, descricao, categoria, tipo, valor, status, classe_saida)
-      VALUES (${data}::date, ${descricao.trim()}, ${categoria.trim()}, ${tipo}, ${valor}, ${status}, ${
-        tipo === 'Saída' ? classe_saida : null
-      })
+      INSERT INTO lancamentos (data, descricao, categoria, tipo, valor, status, classe_saida, user_id)
+      VALUES (
+        ${data}::date,
+        ${descricao.trim()},
+        ${categoria.trim()},
+        ${tipo},
+        ${valor},
+        ${status},
+        ${tipo === 'Saída' ? classe_saida : null},
+        ${user.id}
+      )
       RETURNING id
     `
 

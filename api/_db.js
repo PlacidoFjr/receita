@@ -14,6 +14,26 @@ export async function ensureSchema() {
   if (schemaReady) return
 
   await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);`
+
+  await sql`
     CREATE TABLE IF NOT EXISTS lancamentos (
       id SERIAL PRIMARY KEY,
       data DATE NOT NULL,
@@ -25,6 +45,8 @@ export async function ensureSchema() {
       classe_saida TEXT CHECK (classe_saida IN ('Fixos', 'Variáveis'))
     );
   `
+  await sql`ALTER TABLE lancamentos ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;`
+  await sql`CREATE INDEX IF NOT EXISTS idx_lancamentos_user_id ON lancamentos (user_id);`
   await sql`CREATE INDEX IF NOT EXISTS idx_lancamentos_data ON lancamentos (data);`
   await sql`CREATE INDEX IF NOT EXISTS idx_lancamentos_tipo ON lancamentos (tipo);`
 
@@ -37,6 +59,8 @@ export async function ensureSchema() {
       parcela_atual INTEGER NOT NULL
     );
   `
+  await sql`ALTER TABLE parcelamentos ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;`
+  await sql`CREATE INDEX IF NOT EXISTS idx_parcelamentos_user_id ON parcelamentos (user_id);`
   await sql`CREATE INDEX IF NOT EXISTS idx_parcelamentos_item ON parcelamentos (item);`
 
   schemaReady = true

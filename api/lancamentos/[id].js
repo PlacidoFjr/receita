@@ -1,4 +1,5 @@
 import { ensureSchema, sql } from '../_db.js'
+import { getUserFromAuthHeader } from '../_auth.js'
 import { coerceMoney, isIsoDate, json, readJsonBody } from '../_utils.js'
 
 function parseId(req) {
@@ -10,6 +11,9 @@ function parseId(req) {
 
 export default async function handler(req, res) {
   await ensureSchema()
+  if (req.method === 'OPTIONS') return json(res, 204, {})
+  const user = await getUserFromAuthHeader(req)
+  if (!user) return json(res, 401, { error: 'Não autenticado' })
 
   const id = parseId(req)
   if (!id) return json(res, 400, { error: 'ID inválido' })
@@ -42,7 +46,7 @@ export default async function handler(req, res) {
           valor = ${valor},
           status = ${status},
           classe_saida = ${tipo === 'Saída' ? classe_saida : null}
-      WHERE id = ${id}
+      WHERE id = ${id} AND user_id = ${user.id}
       RETURNING id
     `
     if (!rows.length) return json(res, 404, { error: 'Não encontrado' })
@@ -50,7 +54,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    const rows = await sql`DELETE FROM lancamentos WHERE id = ${id} RETURNING id`
+    const rows = await sql`DELETE FROM lancamentos WHERE id = ${id} AND user_id = ${user.id} RETURNING id`
     if (!rows.length) return json(res, 404, { error: 'Não encontrado' })
     return json(res, 200, { ok: true })
   }
